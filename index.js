@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const Strategy = require('passport-strategy');
 const BasicStrategy = require('passport-http').BasicStrategy;
 const BearerStrategy = require('passport-http-bearer');
+
 exports.NPMStrategyErrorHandler = (err,req,res,next) => {
   if (!err) {
     return void next(null);
@@ -15,8 +16,9 @@ exports.NPMStrategyErrorHandler = (err,req,res,next) => {
     if (typeof err.info === 'string') msg = err.info;
     msg = err.info.message || err.message;
   }
-  res.write(JSON.stringify({'error': msg}, null, 2));
+  res.end(JSON.stringify({'error': msg}, null, 2));
 };
+const LOGIN_URL_PREFIX = '/-/user/org.couchdb.user:';
 exports.NPMStrategy = class NPMStrategy extends Strategy {
   constructor({
     authenticate,
@@ -36,19 +38,27 @@ exports.NPMStrategy = class NPMStrategy extends Strategy {
     super();
     this.name = 'npm';
     if (router && typeof router.put === 'function') {
-      router.put('/-/user/org.couchdb.user:*', bodyParser.json(),
+      router.put(`${LOGIN_URL_PREFIX}*`, bodyParser.json(),
         this.updateNPMUser.bind(this)
       );
     }
     this.authfn = authenticate;
     this.serializeNPMToken = serializeNPMToken;
     this.deserializeNPMToken = deserializeNPMToken;
-    this.basic = new BasicStrategy((username, pass, verify) =>
-      void this.authfn(username, pass, (err, user) =>
+    this.basic = new BasicStrategy({
+      passReqToCallback: true
+    }, (req, name, password, verify) =>
+      void this.authfn({
+        req,
+        name,
+        password
+      }, (err, user) =>
         void verify(err, err ? null : user)
       ))
-    this.bearer = new BearerStrategy((token, done) => 
-      void this.deserializeNPMToken(token, done));
+    this.bearer = new BearerStrategy({
+      passReqToCallback: true
+    }, (req, token, done) => 
+      void this.deserializeNPMToken({req, token}, done));
     Object.freeze(this);
   }
 
@@ -79,7 +89,17 @@ exports.NPMStrategy = class NPMStrategy extends Strategy {
       name,
       password
     } = req.body;
-    this.authfn(name, password, (authenticateError, user) => {
+    if (req.url.slice(LOGIN_URL_PREFIX.length) !== name) {
+      res.statusCode = 400;
+      res.end(JSON.stringify(
+        {message: 'Name mismatch in url and body'}
+      ));
+    }
+    this.authfn({
+      req,
+      name,
+      password
+    }, (authenticateError, user) => {
       if (authenticateError) {
         res.statusCode = authenticateError.status || 500;
         return void res.end(JSON.stringify(
@@ -92,7 +112,11 @@ exports.NPMStrategy = class NPMStrategy extends Strategy {
           {message: 'Unauthorized'}
         ));
       }
-      this.serializeNPMToken(name, password, (serializeError, token) => {
+      this.serializeNPMToken({
+        req,
+        name,
+        password
+      }, (serializeError, token) => {
         if (!token) {
           serializeError = new Error(`Cannot serialize to a coersive falsey token`);
         }

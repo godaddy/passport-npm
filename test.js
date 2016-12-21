@@ -29,7 +29,7 @@ tap.test('token serialization', test =>
     expected: {
       type: 'basic',
       password: 'pass',
-      username: 'user',
+      name: 'user',
       generated_token: LOGIN_TOKEN
     },
     command: 'login',
@@ -43,7 +43,7 @@ tap.test('login invalid', test =>
     expected: {
       type: 'basic',
       password: 'INVALID',
-      username: 'INVALID'
+      name: 'INVALID'
     },
     command: 'view',
     args: ['passport-npm', '--always-auth=true', '--fetch-retries=0'],
@@ -81,7 +81,7 @@ tap.test('token invalid', test =>
 function createTestServer(test, {
   type = 'none', // basic || token || none,
   token = null,
-  username = null,
+  name = null,
   password = null,
   generated_token = null
 }, callback) {
@@ -93,12 +93,15 @@ function createTestServer(test, {
 
     // check the login of a user and create a user object
     // set user to `false` if login is invalid
-    function authenticate(found_username, found_password, done) {
+    function authenticate({
+      name: found_name,
+      password: found_password
+    }, done) {
       if (type !== 'basic') {
         test.fail(new Error(`unexpected basic login, expected ${type}`));
       }
       else {
-        const pass = username === found_username
+        const pass = name === found_name
           && password === found_password;
         if (pass) {
           done(null, {});
@@ -113,7 +116,7 @@ function createTestServer(test, {
     //
     // use this to prevent `npm` from storing username and password on disk
     // commonly used to store an access token
-    function serializeNPMToken(username, password, done) {
+    function serializeNPMToken({name, password}, done) {
       if (type !== 'basic') {
         test.fail(new Error(`unexpected serialization (basic login workflow invoked), expected login type ${type}`));
       }
@@ -122,7 +125,7 @@ function createTestServer(test, {
     // similar to `authenticate`
     //
     // consumes the result token string serializeToken
-    function deserializeNPMToken(tokenString, done) {
+    function deserializeNPMToken({token: tokenString}, done) {
       if (type !== 'token') {
         test.fail(new Error(`unexpected token login, expected ${type}`));
       }
