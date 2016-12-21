@@ -8,7 +8,11 @@ Passport strategy for authenticating an `npm` client.
 const { NPMStrategy, NPMStrategyErrorHandler } = require('passport-npm');
 // check the login of a user and create a user object
 // set user to `false` if login is invalid
-function authenticate(username, password, done) {
+function authenticate({
+  req, // HTTP.IncomingMessage
+  name, // string
+  password // string
+}, done) {
   done(null, /* User on success || false on failure */);
 }
 // creates a string for `npm` to store in user .npmrc
@@ -16,13 +20,20 @@ function authenticate(username, password, done) {
 //
 // use this to prevent `npm` from storing username and password on disk
 // commonly used to store an access token
-function serializeNPMToken(username, password, done) {
+function serializeNPMToken({
+  req, // HTTP.IncomingMessage
+  name, // string
+  password // string
+}, done) {
   done(null, /* non-falsey token string || false to store username and password instead */)
 }
 // similar to `authenticate`
 //
 // consumes the result token string serializeToken
-function deserializeNPMToken(tokenString, done) {
+function deserializeNPMToken({
+  req, // HTTP.IncomingMessage
+  token // string
+}, done) {
   done(null, /* User on success || false on failure */);
 }
 
@@ -110,7 +121,7 @@ npm login --registry=http://localhost:8080/
 # username = user
 # password = pass
 # email = # ignored
-npm install passport-npm
+npm --registry=http://localhost:8080/ install passport-npm
 ```
 
 ## `npm` doesn't always show the error messages I send
