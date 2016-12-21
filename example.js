@@ -6,40 +6,53 @@ const router = require('express')();
 const sessions = Object.create(null);
 let sessionId = 1;
 
-function authenticate(id, password, done) {
-  console.log(`User ${id} trying to log in`);
-  if (id === 'user' && password === 'pass') {
-    done(null, {
-      id
-    });
+function authenticate({req, name, password}, done) {
+  if (name === 'user' && password === 'pass') {
+    done(null, {name});
     return;
   }
   done(null, false);
 }
-function serializeNPMToken(id, pass, done) {
-  const SID = sessionId++;
-  console.log(`Saving Session for ${id} as SID: ${SID}`);
-  sessions[SID] = {user:{id}, time:Date.now()};
-  done(null, SID);
+function serializeNPMToken({req, name, password}, done) {
+  const token = JSON.stringify(sessionId++);
+  // lets lock our session to only work if new connection has the same remote IP
+  // you can test this using npm's `--local-address` config option
+  const remoteAddress = req.socket.remoteAddress;
+  sessions[token] = {
+    user: {name},
+    remoteAddress,
+    time:Date.now()
+  };
+  console.log(`Saving Session for ${name} as Token: ${token}`);
+  done(null, token);
 }
-function deserializeNPMToken(SID, done) {
-  console.log(`Session ${SID} reviving.`)
-  if (!(SID in sessions)) {
-    done(new Error('Unknown session'));
+function deserializeNPMToken({req,token}, done) {
+  console.log(`Session ${token} reviving.`);
+  const session = JSON.parse(token);
+  if (!(session in sessions)) {
+    const err = new Error(`Unknown session ${token}, please login again.`);
+    err.status = 401;
+    done(err);
     return;
   }
-  const session = sessions[SID];
+  const cachedSession = sessions[session];
+  if (req.socket.remoteAddress !== cachedSession.remoteAddress) {
+    const err = new Error('Login tied to different IP, please login again.');
+    err.status = 401;
+    done(err);
+    return;
+  }
   // only keep session valid for 10 seconds
-  const TTL = 10 * 1000 - (Date.now() - session.time);
-  console.log(`Session ${SID} TTL: ${TTL}`)
+  const TTL = 10 * 1000 - (Date.now() - cachedSession.time);
+  console.log(`Session ${token} TTL: ${TTL}`)
   if (TTL < 0) {
-    const err = new Error('Session has expired, login again');
+    const err = new Error('Session has expired, please login again');
     // this may not show a msg telling client login due to `npm` cli logic
     err.status = 401;
     done(err);
     return;
   }
-  done(null, session.user);
+  done(null, cachedSession.user);
 }
 
 passport.use(new NPMStrategy({
@@ -50,7 +63,7 @@ passport.use(new NPMStrategy({
 }));
 router.use(
   (req, res, next) => {
-    console.error(req.method, req.url);
+    console.log(`Incoming request: ${req.method} ${req.url}`);
     next(null);
   },
   passport.initialize(),
@@ -62,9 +75,13 @@ router.use(
     // npm client doesn't have compatible response parsing with PassportJS
     failWithError: true
   }),
+  (err, req, res, next) => {
+    if (err) console.log(err.status, err);
+    next(err);
+  },
   NPMStrategyErrorHandler,
   (req, res) => {
-    console.log(`authenticated as ${req.user.id}`)
+    console.log(`Authenticated as ${req.user.name}`)
     res.end(`{}`);
   }
 );

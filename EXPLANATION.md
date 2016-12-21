@@ -86,7 +86,7 @@ Note: If your npm configuration has username/password via `_auth` (check your `.
 
 * [key](https://docs.npmjs.com/misc/config#key)
 
-* [local-ddress](https://docs.npmjs.com/misc/config#local-ddress)
+* [local-address](https://docs.npmjs.com/misc/config#local-address)
 
 * [https-proxy](https://docs.npmjs.com/misc/config#https-proxy)
 
