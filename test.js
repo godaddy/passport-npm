@@ -1,17 +1,16 @@
 'use strict';
 
-const {NPMStrategy,NPMStrategyErrorHandler} = require('./');
+const NPMStrategy = require('./').NPMStrategy;
+const NPMStrategyErrorHandler = require('./').NPMStrategyErrorHandler;
 
 const tap = require('tap');
 const http = require('http');
 const express = require('express');
 const passport = require('passport');
 const spawn = require('child_process').spawn;
-const {
-  createReadStream,
-  readFileSync,
-  writeFileSync
-} = require('fs');
+const createReadStream = require('fs').createReadStream;
+const readFileSync = require('fs').readFileSync;
+const writeFileSync = require('fs').writeFileSync;
 const path = require('path');
 const tmp = require('tmp');
 
@@ -78,13 +77,14 @@ tap.test('token invalid', test =>
   })
 );
 
-function createTestServer(test, {
-  type = 'none', // basic || token || none,
-  token = null,
-  name = null,
-  password = null,
-  generated_token = null
-}, callback) {
+function createTestServer(test, options, callback) {
+  options = options || {};
+  const type = options.type || 'none'; // basic || token || none,
+  const token = options.token || null;
+  const name = options.name || null;
+  const password = options.password || null;
+  const generated_token = options.generated_token || null;
+
   const router = express();
   const server = http.createServer(router);
   server.listen(0, '127.0.0.1', (err)=> {
@@ -93,16 +93,13 @@ function createTestServer(test, {
 
     // check the login of a user and create a user object
     // set user to `false` if login is invalid
-    function authenticate({
-      name: found_name,
-      password: found_password
-    }, done) {
+    function authenticate(found, done) {
       if (type !== 'basic') {
         test.fail(new Error(`unexpected basic login, expected ${type}`));
       }
       else {
-        const pass = name === found_name
-          && password === found_password;
+        const pass = name === found.name
+          && password === found.password;
         if (pass) {
           done(null, {});
         }
@@ -116,7 +113,7 @@ function createTestServer(test, {
     //
     // use this to prevent `npm` from storing username and password on disk
     // commonly used to store an access token
-    function serializeNPMToken({name, password}, done) {
+    function serializeNPMToken(found, done) {
       if (type !== 'basic') {
         test.fail(new Error(`unexpected serialization (basic login workflow invoked), expected login type ${type}`));
       }
@@ -125,11 +122,11 @@ function createTestServer(test, {
     // similar to `authenticate`
     //
     // consumes the result token string serializeToken
-    function deserializeNPMToken({token: tokenString}, done) {
+    function deserializeNPMToken(found, done) {
       if (type !== 'token') {
         test.fail(new Error(`unexpected token login, expected ${type}`));
       }
-      test.equal(tokenString, token, 'should have the right token string');
+      test.equal(found.token, token, 'should have the right token string');
       done(null, {});
     }
 
@@ -169,16 +166,17 @@ function createTestServer(test, {
 // npmrc files can use variables:
 // - $PORT : testing server port
 // - $TOKEN : the generated_token
-function testNPM({
-  test,
-  expected = {},
-  stdin_file = blank,
-  command,
-  expected_exit = 0,
-  args = [],
-  starting_npmrc = blank,
-  expected_npmrc = blank,
-}) {
+function testNPM(options) {
+  options = options || {};
+  const test = options.test;
+  const expected =  options.expected || {};
+  const stdin_file =  options.stdin_file || blank;
+  const command = options.command;
+  const expected_exit =  options.expected_exit || 0;
+  const args =  options.args || [];
+  const starting_npmrc =  options.starting_npmrc || blank;
+  const expected_npmrc =  options.expected_npmrc || blank;
+  
   createTestServer(test, expected, (err, server) => {
     if (err) return void test.fail(err);
 
@@ -208,9 +206,8 @@ function testNPM({
           `--userconfig=${tmp_npmrc}`,
           `--globalconfig=${blank}`,
           `--loglevel=silent`,
-          command,
-          ...args
-        ], {
+          command
+        ].concat(args), {
           // npm demands stdout/err be a tty
           stdio: ['pipe', 'inherit', 'inherit'],
           env: {PATH:process.env.PATH}

@@ -20,12 +20,12 @@ exports.NPMStrategyErrorHandler = (err,req,res,next) => {
 };
 const LOGIN_URL_PREFIX = '/-/user/org.couchdb.user:';
 exports.NPMStrategy = class NPMStrategy extends Strategy {
-  constructor({
-    authenticate,
-    serializeNPMToken,
-    deserializeNPMToken,
-    router
-  }) {
+  constructor(options) {
+    options = options || {};
+    const authenticate = options.authenticate;
+    const serializeNPMToken = options.serializeNPMToken;
+    const deserializeNPMToken = options.deserializeNPMToken;
+    const router = options.router;
     if (typeof authenticate !== 'function') {
       throw TypeError('Required option "authenticate" must be a function');
     }
@@ -85,10 +85,8 @@ exports.NPMStrategy = class NPMStrategy extends Strategy {
   }
 
   updateNPMUser(req, res) {
-    const {
-      name,
-      password
-    } = req.body;
+    const name = req.body.name;
+    const password = req.body.password;
     if (req.url.slice(LOGIN_URL_PREFIX.length) !== name) {
       res.statusCode = 400;
       res.end(JSON.stringify(
