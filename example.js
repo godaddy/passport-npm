@@ -1,32 +1,53 @@
 #!/usr/bin/env node
+'use strict';
 
 const passport = require('passport');
-const { NPMStrategy, NPMStrategyErrorHandler } = require('./');
+const NPMStrategy = require('./').NPMStrategy;
+const NPMStrategyErrorHandler = require('./').NPMStrategyErrorHandler;
 const router = require('express')();
+
+// dictionary to store user sessions
 const sessions = Object.create(null);
 let sessionId = 1;
 
-function authenticate({req, name, password}, done) {
+function authenticate(data, done) {
+  const req = data.req;
+  const name = data.name;
+  const password = data.password;
+
   if (name === 'user' && password === 'pass') {
-    done(null, {name});
+    done(null, {
+      name
+    });
     return;
   }
   done(null, false);
 }
-function serializeNPMToken({req, name, password}, done) {
+
+function serializeNPMToken(data, done) {
+  const req = data.req;
+  const name = data.name;
+  const password = data.password;
+
   const token = JSON.stringify(sessionId++);
   // lets lock our session to only work if new connection has the same remote IP
   // you can test this using npm's `--local-address` config option
   const remoteAddress = req.socket.remoteAddress;
   sessions[token] = {
-    user: {name},
+    user: {
+      name
+    },
     remoteAddress,
     time:Date.now()
   };
   console.log(`Saving Session for ${name} as Token: ${token}`);
   done(null, token);
 }
-function deserializeNPMToken({req,token}, done) {
+
+function deserializeNPMToken(data, done) {
+  const req = data.req;
+  const token = data.token;
+
   console.log(`Session ${token} reviving.`);
   const session = JSON.parse(token);
   if (!(session in sessions)) {
@@ -61,6 +82,7 @@ passport.use(new NPMStrategy({
   serializeNPMToken,
   deserializeNPMToken
 }));
+
 router.use(
   (req, res, next) => {
     console.log(`Incoming request: ${req.method} ${req.url}`);
@@ -75,6 +97,7 @@ router.use(
     // npm client doesn't have compatible response parsing with PassportJS
     failWithError: true
   }),
+  // print out our errors to the server console
   (err, req, res, next) => {
     if (err) console.log(err.status, err);
     next(err);
@@ -85,6 +108,7 @@ router.use(
     res.end(`{}`);
   }
 );
+
 const server = require('http').createServer(router);
 server.listen(process.env.PORT || 8080, (err) => {
   if (err) {
